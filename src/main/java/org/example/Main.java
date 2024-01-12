@@ -1,11 +1,12 @@
 package org.example;
 
-import org.example.features.client.Client;
+import org.example.features.client.ClientService;
 import org.example.features.client.UDPInitListener;
 import org.example.features.server.Server;
 
 import java.io.IOException;
 import java.util.Optional;
+import java.util.Scanner;
 
 public class Main {
 
@@ -20,12 +21,18 @@ public class Main {
         Optional<Integer> serverPort = UDPInitListener.listenForMessages(UDP_PORT, UDP_TIMEOUT_MILLIS);
 
         if (serverPort.isPresent()) {
-            Client client = new Client();
-            client.run();
-//            EchoClient echoClient = EchoClient.start("localhost", TCP_PORT);
+            ClientService clientService = ClientService.start("localhost", TCP_PORT);
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                onShutdown(client);
+                onShutdown(clientService);
             }));
+
+            while (true) {
+                Scanner scanner = new Scanner(System.in);
+                String nextLine = scanner.nextLine();
+                clientService.sendMessage(nextLine);
+                clientService.readMessage();
+//                Thread.sleep(1000);
+            }
         } else {
             Server server = new Server(UDP_PORT, TCP_PORT);
             server.run("localhost", TCP_PORT);
