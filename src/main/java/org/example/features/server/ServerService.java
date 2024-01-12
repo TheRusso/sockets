@@ -11,25 +11,36 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.*;
 
-public class Server implements Stoppable {
+public class ServerService implements Stoppable {
 
     private final UDPInitSender udpInitSender;
     private Thread senderThread;
-
-    private Integer tcpPort;
-
-    private boolean isActive = true;
+    private Integer port;
+    private String host;
+    private ByteBuffer buffer;
 
     private static Map<String, SocketChannel> clients = new HashMap<>();
 
-    public Server(Integer udpPort, Integer tcpPort) {
+    private static ServerService instance;
+
+    public static ServerService getInstance(Integer udpPort, Integer tcpPort, String host) {
+        if (instance == null) {
+            instance = new ServerService(udpPort, tcpPort, host);
+        }
+
+        return instance;
+    }
+
+    public ServerService(Integer udpPort, Integer tcpPort, String host) {
         System.out.println("Running server on port: " + tcpPort);
         udpInitSender = new UDPInitSender(udpPort, tcpPort);
 
-        this.tcpPort = tcpPort;
+        this.port = tcpPort;
+        this.host = host;
+        this.buffer = ByteBuffer.allocate(256);
     }
 
-    public void run(String host, Integer port) {
+    public void listen() {
         senderThread = new Thread(udpInitSender);
         senderThread.start();
 
@@ -50,35 +61,36 @@ public class Server implements Stoppable {
 
         System.out.println("Non-blocking server started on port " + port);
 
-        ByteBuffer buffer = ByteBuffer.allocate(256);
-
+        buffer.clear();
         while (true) {
             selector.select();
             Set<SelectionKey> selectedKeys = selector.selectedKeys();
             Iterator<SelectionKey> iter = selectedKeys.iterator();
             while (iter.hasNext()) {
-
                 SelectionKey key = iter.next();
-
-                if (key.isAcceptable()) {
-                    register(selector, serverSocket);
-                }
-
-                if (key.isReadable()) {
-                    answerWithEcho(buffer, key);
-                }
+                handleKey(key, selector, serverSocket);
                 iter.remove();
             }
         }
 
     }
 
-    private static void answerWithEcho(ByteBuffer buffer, SelectionKey key)
+    private void handleKey(SelectionKey key, Selector selector, ServerSocketChannel serverSocket) throws IOException {
+        if (key.isAcceptable()) {
+            register(selector, serverSocket);
+        }
+
+        if (key.isReadable()) {
+            handleReadKey(key);
+        }
+    }
+
+    private void handleReadKey(SelectionKey key)
             throws IOException {
 
         SocketChannel client = (SocketChannel) key.channel();
         try {
-            Optional<String> messageOptional = readMessage(buffer, client);
+            Optional<String> messageOptional = readMessage(client);
             if (messageOptional.isPresent()) {
                 handleMessage(messageOptional.get(), client);
             }
@@ -89,13 +101,13 @@ public class Server implements Stoppable {
     }
 
     private static void handleMessage(String message, SocketChannel client) throws IOException {
-        System.out.println("Received message from client: " + message);
+        System.out.printf("%s: %s", client.getRemoteAddress(), message);
 
         String[] words = message.split(" ");
-        if (!Set.of("NAME", "EXIT").contains(words[0])) {
-            String name = words[0];
-            if (clients.containsKey(name)) {
-                SocketChannel receiver = clients.get(name);
+        String command = words[0];
+        if (!Set.of("NAME", "EXIT").contains(command)) {
+            if (clients.containsKey(command)) {
+                SocketChannel receiver = clients.get(command);
                 receiver.write(ByteBuffer.wrap(message.getBytes()));
                 client.write(ByteBuffer.wrap("Message sent successfully".getBytes()));
                 return;
@@ -107,8 +119,8 @@ public class Server implements Stoppable {
         }
 
 
-        if ("NAME".equals(words[0])) {
-            String name = message.substring(words[0].length() + 1);
+        if ("NAME".equals(command)) {
+            String name = message.substring(command.length() + 1);
 
             if (clients.containsValue(client)) {
                 client.write(ByteBuffer.wrap("You already registered".getBytes()));
@@ -127,7 +139,7 @@ public class Server implements Stoppable {
             return;
         }
 
-        if ("EXIT".equals(words[0])) {
+        if ("EXIT".equals(command)) {
             System.out.println("Connection closed by client: " + client.getRemoteAddress());
             client.close();
             return;
@@ -136,7 +148,7 @@ public class Server implements Stoppable {
         client.write(ByteBuffer.wrap("Message is invalid".getBytes()));
     }
 
-    private static Optional<String> readMessage(ByteBuffer buffer, SocketChannel client) throws IOException {
+    private Optional<String> readMessage(SocketChannel client) throws IOException {
         int bytesRead = client.read(buffer);
 
         if (bytesRead == -1) {
@@ -157,20 +169,16 @@ public class Server implements Stoppable {
         return Optional.empty();
     }
 
-    private static void register(Selector selector, ServerSocketChannel serverSocket)
-            throws IOException {
-
+    private static void register(Selector selector, ServerSocketChannel serverSocket) throws IOException {
         SocketChannel client = serverSocket.accept();
         client.configureBlocking(false);
         client.register(selector, SelectionKey.OP_READ);
         System.out.println("Accepted connection from: " + client.getRemoteAddress());
-
     }
 
     @Override
     public void stop() {
         udpInitSender.stop();
-        isActive = false;
     }
 
 }

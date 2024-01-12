@@ -2,7 +2,7 @@ package org.example;
 
 import org.example.features.client.ClientService;
 import org.example.features.client.UDPInitListener;
-import org.example.features.server.Server;
+import org.example.features.server.ServerService;
 
 import java.io.IOException;
 import java.util.Optional;
@@ -16,7 +16,7 @@ public class Main {
     private static final Integer UDP_TIMEOUT_MILLIS = 5000; // 5 seconds
 
 
-    public static void main(String[] args) throws IOException, InterruptedException {
+    public static void main(String[] args) throws IOException {
 
         Optional<Integer> serverPort = UDPInitListener.listenForMessages(UDP_PORT, UDP_TIMEOUT_MILLIS);
 
@@ -34,10 +34,10 @@ public class Main {
 //                Thread.sleep(1000);
             }
         } else {
-            Server server = new Server(UDP_PORT, TCP_PORT);
-            server.run("localhost", TCP_PORT);
+            ServerService serverService = ServerService.getInstance(UDP_PORT, TCP_PORT, "localhost");
+            serverService.listen();
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                onShutdown(server);
+                onShutdown(serverService);
             }));
         }
     }
