@@ -44,5 +44,8 @@ public class ServerClientStorage {
                 .anyMatch(client -> client.channel().equals(socketChannel));
     }
 
+    public int size() {
+        return clients.size();
+    }
 
 }

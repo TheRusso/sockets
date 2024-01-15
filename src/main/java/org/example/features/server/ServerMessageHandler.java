@@ -1,52 +1,28 @@
 package org.example.features.server;
 
+import org.example.features.server.model.Command;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Optional;
 import java.util.Set;
 
 public class ServerMessageHandler {
 
-    private ByteBuffer buffer;
+
     private final ServerClientStorage serverClientStorage;
 
     public ServerMessageHandler() {
-        this.buffer = ByteBuffer.allocate(256);
         this.serverClientStorage = new ServerClientStorage();
     }
 
-    public void register(Selector selector, ServerSocketChannel serverSocket) throws IOException {
-        SocketChannel client = serverSocket.accept();
-        client.configureBlocking(false);
-        client.register(selector, SelectionKey.OP_READ);
-        System.out.println("Accepted connection from: " + client.getRemoteAddress());
-    }
-
-    public void handleReadKey(SelectionKey key)
-            throws IOException {
-
-        SocketChannel client = (SocketChannel) key.channel();
-        try {
-            Optional<String> messageOptional = readMessage(client);
-            if (messageOptional.isPresent()) {
-                handleMessage(messageOptional.get(), client);
-            }
-        } catch (IOException e) {
-            System.out.printf("Error processing message: %s\n", e.getMessage());
-            client.close();
-        }
-    }
-
-    private void handleMessage(String receivedMessage, SocketChannel client) throws IOException {
+    public void handleMessage(SocketChannel client, String receivedMessage) throws IOException {
         System.out.printf("%s: %s\n", client.getRemoteAddress(), receivedMessage);
 
         String[] words = receivedMessage.split(" ");
         if (words.length == 0) {
-            sendMessageToClient(client, "There is no command");
+            sendServerMessageToClient(client, "There is no command");
             return;
         }
 
@@ -55,7 +31,7 @@ public class ServerMessageHandler {
 
         Set<String> commandsThatRequiresMessage = Set.of("NAME");
         if (commandsThatRequiresMessage.contains(commandFromUser) && words.length == 1) {
-            sendMessageToClient(client, "There is no message");
+            sendServerMessageToClient(client, "There is no message");
             return;
         }
 
@@ -63,14 +39,12 @@ public class ServerMessageHandler {
             message = receivedMessage.substring(commandFromUser.length() + 1);
         }
 
-
         if (!serverClientStorage.isClientExists(client) && !commandFromUser.equals("NAME")) {
-            sendMessageToClient(client, "You are not registered, register first with command `NAME {your name}`");
+            sendServerMessageToClient(client, "You are not registered, register first with command `NAME {your name}`");
             return;
         }
 
-        Set<String> commands = Set.of("NAME", "QUIT", "STAT");
-        if (commands.contains(commandFromUser)) {
+        if (Command.exists(commandFromUser)) {
             handleCommand(client, commandFromUser, message);
         } else {
             sendMessageToUser(client, commandFromUser, message);
@@ -81,68 +55,67 @@ public class ServerMessageHandler {
         switch (commandFromUser) {
             case "NAME" -> {
                 if (serverClientStorage.isClientExists(message)) {
-                    sendMessageToClient(client, "Name already exists");
+                    sendServerMessageToClient(client, "Name already exists, choose another one");
                 } else {
                     serverClientStorage.addClient(message, client);
-                    sendMessageToClient(client, "Name registered successfully");
+                    sendServerMessageToClient(client, "Name registered successfully");
                     System.out.println("Client name: " + message);
                 }
             }
             case "STAT" -> {
                 String messageToClient = String.format("Clients: %s", serverClientStorage.getClientNames());
-                sendMessageToClient(client, messageToClient);
+                sendServerMessageToClient(client, messageToClient);
             }
             case "QUIT" -> {
                 System.out.println("Connection closed by client: " + client.getRemoteAddress());
                 client.close();
             }
-            default -> System.out.println("Command not found");
+            default -> sendServerMessageToClient(client, "Unknown command");
         }
     }
 
-    private static void sendMessageToClient(SocketChannel client, String message) throws IOException {
-        client.write(ByteBuffer.wrap(message.getBytes()));
+    private static void sendServerMessageToClient(SocketChannel client, String message) throws IOException {
+        sendMessageToClient(client, "Server", message);
+    }
+
+    private static void sendMessageToClient(SocketChannel client, String senderName, String message) throws IOException {
+        String messageToSend = getMessageToSend(senderName, message);
+        client.write(ByteBuffer.wrap(messageToSend.getBytes()));
+    }
+
+    private static String getMessageToSend(String senderName, String message) {
+        String messageToSend;
+        if (senderName != null && !senderName.isEmpty()) {
+            messageToSend = senderName + ": " + message;
+        } else {
+            messageToSend = message;
+        }
+        return messageToSend;
     }
 
     private void sendMessageToUser(SocketChannel client, String commandFromUser, String clientMessage) throws IOException {
         Optional<SocketChannel> receiverOpt = serverClientStorage.getClient(commandFromUser);
         if (receiverOpt.isEmpty()) {
-            sendMessageToClient(client, "User not found");
+            sendMessageToClient(client, "User not found", clientMessage);
             return;
         }
 
         SocketChannel receiver = receiverOpt.get();
 
         if (receiver.equals(client)) {
-            sendMessageToClient(client, "You can't send message to yourself");
+            sendMessageToClient(client, "You can't send message to yourself", clientMessage);
             return;
         }
 
-        String message = String.format("%s: %s", commandFromUser, clientMessage);
-        sendMessageToClient(receiver, message);
-        sendMessageToClient(client, "Message sent successfully");
+        sendMessageToClient(receiver, commandFromUser, clientMessage);
+        sendMessageToClient(client, "Message sent successfully", clientMessage);
     }
 
-    private Optional<String> readMessage(SocketChannel client) throws IOException {
-        buffer.clear();
-        int bytesRead = client.read(buffer);
-
-        if (bytesRead == -1) {
-            // Connection closed by the client
-            System.out.println("Connection closed by client: " + client.getRemoteAddress());
-            client.close();
-        } else if (bytesRead > 0) {
-            // Process the received data
-            buffer.flip();
-            byte[] data = new byte[buffer.remaining()];
-            buffer.get(data);
-
-//            client.write(ByteBuffer.wrap(data));
-            buffer.clear();
-            return Optional.of(new String(data));
-        }
-
-        return Optional.empty();
+    public void askForName(SocketChannel client) throws IOException {
+        int size = serverClientStorage.size();
+        String autoName = String.format("Client%s", size + 1);
+        String message = String.format("Write your name(Enter to generate auto name `%s`): NAME {your name}", autoName);
+        client.write(ByteBuffer.wrap(message.getBytes()));
     }
 
 }

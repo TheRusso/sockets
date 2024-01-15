@@ -37,4 +37,8 @@ public enum Command {
         return name;
     }
 
+    public static boolean exists(String name) {
+        return INSTANCES.containsKey(name);
+    }
+
 }

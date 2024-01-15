@@ -19,6 +19,7 @@ public class ServerService implements Stoppable {
     private Thread senderThread;
     private Integer port;
     private String host;
+    private ByteBuffer buffer;
     private final ServerMessageHandler serverMessageHandler;
 
     private static ServerService instance;
@@ -37,6 +38,7 @@ public class ServerService implements Stoppable {
 
         this.port = tcpPort;
         this.host = host;
+        this.buffer = ByteBuffer.allocate(256);
         this.serverMessageHandler = new ServerMessageHandler();
     }
 
@@ -67,21 +69,60 @@ public class ServerService implements Stoppable {
             Iterator<SelectionKey> iter = selectedKeys.iterator();
             while (iter.hasNext()) {
                 SelectionKey key = iter.next();
-                handleKey(key, selector, serverSocket);
+                try {
+                    handleKey(key, selector, serverSocket);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
                 iter.remove();
             }
         }
-
     }
 
     private void handleKey(SelectionKey key, Selector selector, ServerSocketChannel serverSocket) throws IOException {
         if (key.isAcceptable()) {
-            serverMessageHandler.register(selector, serverSocket);
+            register(selector, serverSocket);
         }
 
         if (key.isReadable()) {
-            serverMessageHandler.handleReadKey(key);
+            SocketChannel client = (SocketChannel) key.channel();
+            Optional<String> messageOptional = readMessage(client);
+            if (messageOptional.isPresent()) {
+                serverMessageHandler.handleMessage(client, messageOptional.get());
+            } else {
+                System.out.println("Error processing message");
+            }
         }
+    }
+
+    private Optional<String> readMessage(SocketChannel client) throws IOException {
+        buffer.clear();
+        int bytesRead = client.read(buffer);
+
+        if (bytesRead == -1) {
+            // Connection closed by the client
+            System.out.println("Connection closed by client: " + client.getRemoteAddress());
+            client.close();
+        } else if (bytesRead > 0) {
+            // Process the received data
+            buffer.flip();
+            byte[] data = new byte[buffer.remaining()];
+            buffer.get(data);
+
+//            client.write(ByteBuffer.wrap(data));
+            buffer.clear();
+            return Optional.of(new String(data));
+        }
+
+        return Optional.empty();
+    }
+
+    private void register(Selector selector, ServerSocketChannel serverSocket) throws IOException {
+        SocketChannel client = serverSocket.accept();
+        client.configureBlocking(false);
+        client.register(selector, SelectionKey.OP_READ);
+        System.out.println("Accepted connection from: " + client.getRemoteAddress());
+        serverMessageHandler.askForName(client);
     }
 
     @Override
