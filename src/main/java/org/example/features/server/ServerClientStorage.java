@@ -10,7 +10,7 @@ import java.util.stream.Collectors;
 
 public class ServerClientStorage {
 
-    private final List<ServerClient> clients = new ArrayList<>();
+    private static final List<ServerClient> clients = new ArrayList<>();
 
     public void addClient(String clientName, SocketChannel channel) {
         ServerClient client = new ServerClient(clientName, channel);

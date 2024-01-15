@@ -89,9 +89,8 @@ public class ServerMessageHandler {
                 }
             }
             case "STAT" -> {
-                String clients = serverClientStorage.getClientNames();
-                String messageToClient = String.format("Clients: %s", clients);
-                sendMessageToClient(client, clients);
+                String messageToClient = String.format("Clients: %s", serverClientStorage.getClientNames());
+                sendMessageToClient(client, messageToClient);
             }
             case "QUIT" -> {
                 System.out.println("Connection closed by client: " + client.getRemoteAddress());
