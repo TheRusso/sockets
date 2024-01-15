@@ -41,6 +41,16 @@ public class ServerService implements Stoppable {
         this.host = host;
         this.buffer = ByteBuffer.allocate(256);
         this.serverMessageHandler = new ServerMessageHandler();
+
+
+        System.out.println("   _____                          \n" +
+                "  / ____|                         \n" +
+                " | (___   ___ _ ____   _____ _ __ \n" +
+                "  \\___ \\ / _ \\ '__\\ \\ / / _ \\ '__|\n" +
+                "  ____) |  __/ |   \\ V /  __/ |   \n" +
+                " |_____/ \\___|_|    \\_/ \\___|_|   \n" +
+                "                                  \n" +
+                "                                  ");
     }
 
     public void listen() {

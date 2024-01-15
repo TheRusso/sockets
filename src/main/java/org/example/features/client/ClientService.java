@@ -32,7 +32,7 @@ public class ClientService implements Stoppable {
             try {
                 while (true) {
                     if (System.in.available() > 0) {
-                        String message = scanner.next();
+                        String message = scanner.nextLine();
                         sendMessage(message);
                         if ("QUIT".equals(message)) {
                             break;
@@ -68,6 +68,14 @@ public class ClientService implements Stoppable {
             client = SocketChannel.open(new InetSocketAddress(host, port));
             System.out.println("Connected to server: " + client.getRemoteAddress());
             buffer = ByteBuffer.allocate(256);
+            System.out.println("   _____ _ _            _   \n" +
+                    "  / ____| (_)          | |  \n" +
+                    " | |    | |_  ___ _ __ | |_ \n" +
+                    " | |    | | |/ _ \\ '_ \\| __|\n" +
+                    " | |____| | |  __/ | | | |_ \n" +
+                    "  \\_____|_|_|\\___|_| |_|\\__|\n" +
+                    "                            \n" +
+                    "                            ");
         } catch (IOException e) {
             e.printStackTrace();
         }

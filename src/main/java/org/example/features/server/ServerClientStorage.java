@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class ServerClientStorage {
 
@@ -60,6 +61,10 @@ public class ServerClientStorage {
 
     public String generateName() {
         return String.format("Client%s", historicalClients + 1);
+    }
+
+    public Stream<ServerClient> getServerClients() {
+        return clients.stream();
     }
 
 }
