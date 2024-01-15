@@ -6,14 +6,20 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
+import java.util.Scanner;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class ClientService implements Stoppable {
 
     private static SocketChannel client;
     private static ByteBuffer buffer;
     private static ClientService instance;
+    private static final Scanner scanner = new Scanner(System.in);
 
-    public static ClientService start(String host, Integer port) {
+    private static final ExecutorService executorService = Executors.newFixedThreadPool(2);
+
+    public static ClientService getInstance(String host, Integer port) {
         if (instance == null) {
             instance = new ClientService(host, port);
         }
@@ -21,13 +27,39 @@ public class ClientService implements Stoppable {
         return instance;
     }
 
+    public void start() {
+        executorService.execute(() -> {
+            try {
+                while (true) {
+                    if (System.in.available() > 0) {
+                        String message = scanner.next();
+                        sendMessage(message);
+                        if ("QUIT".equals(message)) {
+                            break;
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                System.out.println(e.getMessage());
+                stop();
+            }
+        });
+        executorService.execute(() -> {
+            try {
+                while (true) {
+                    readMessage();
+                }
+            } catch (Exception e) {
+                System.out.println(e.getMessage());
+                stop();
+            }
+        });
+    }
+
     @Override
     public void stop() {
-        try {
-            client.close();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        scanner.close();
+        executorService.shutdownNow();
         buffer = null;
     }
 
@@ -45,7 +77,8 @@ public class ClientService implements Stoppable {
         buffer.clear();
         int read = client.read(buffer);
         if (read == -1) {
-            return;
+            client.close();
+            throw new RuntimeException("Connection closed");
         }
         buffer.flip();
 

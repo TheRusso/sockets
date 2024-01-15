@@ -14,6 +14,7 @@ public enum Command {
     BCST("BCST"),
     IPAD("IPAD"),
     KILL("KILL"),
+    HELP("HELP"),
     UNKNOWN("UNKNOWN")
 
     // placeholder
@@ -31,6 +32,10 @@ public enum Command {
 
     public static Command of(String name) {
         return INSTANCES.getOrDefault(name, UNKNOWN);
+    }
+
+    public static String getNames() {
+        return String.join(", ", INSTANCES.keySet());
     }
 
     public String getName() {

@@ -10,11 +10,14 @@ import java.util.stream.Collectors;
 
 public class ServerClientStorage {
 
+    private static int historicalClients = 0;
+
     private static final List<ServerClient> clients = new ArrayList<>();
 
     public void addClient(String clientName, SocketChannel channel) {
         ServerClient client = new ServerClient(clientName, channel);
         clients.add(client);
+        historicalClients++;
     }
 
     public void removeClient(String clientName) {
@@ -46,6 +49,17 @@ public class ServerClientStorage {
 
     public int size() {
         return clients.size();
+    }
+
+    public Optional<String> getClientName(SocketChannel client) {
+        return clients.stream()
+                .filter(serverClient -> serverClient.channel().equals(client))
+                .findFirst()
+                .map(ServerClient::clientName);
+    }
+
+    public String generateName() {
+        return String.format("Client%s", historicalClients + 1);
     }
 
 }

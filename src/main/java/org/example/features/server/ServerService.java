@@ -1,5 +1,6 @@
 package org.example.features.server;
 
+
 import org.example.Stoppable;
 
 import java.io.IOException;
@@ -89,8 +90,6 @@ public class ServerService implements Stoppable {
             Optional<String> messageOptional = readMessage(client);
             if (messageOptional.isPresent()) {
                 serverMessageHandler.handleMessage(client, messageOptional.get());
-            } else {
-                System.out.println("Error processing message");
             }
         }
     }
@@ -122,7 +121,6 @@ public class ServerService implements Stoppable {
         client.configureBlocking(false);
         client.register(selector, SelectionKey.OP_READ);
         System.out.println("Accepted connection from: " + client.getRemoteAddress());
-        serverMessageHandler.askForName(client);
     }
 
     @Override
