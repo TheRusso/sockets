@@ -52,7 +52,7 @@ public class ClientService implements Stoppable {
         byte[] responseData = new byte[buffer.remaining()];
         buffer.get(responseData);
 
-        System.out.println("Received response from server: " + new String(responseData));
+        System.out.println("> " + new String(responseData));
     }
 
     public void sendMessage(String message) throws IOException {

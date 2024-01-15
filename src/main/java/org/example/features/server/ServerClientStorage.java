@@ -6,6 +6,7 @@ import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class ServerClientStorage {
 
@@ -30,7 +31,7 @@ public class ServerClientStorage {
     public String getClientNames() {
         return clients.stream()
                 .map(ServerClient::clientName)
-                .reduce("", (acc, clientName) -> acc + clientName + "\n");
+                .collect(Collectors.joining(", "));
     }
 
     public boolean isClientExists(String clientName) {
