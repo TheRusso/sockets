@@ -41,11 +41,11 @@ public class ClientService implements Stoppable {
         }
     }
 
-    public boolean readMessage() throws IOException {
+    public void readMessage() throws IOException {
         buffer.clear();
         int read = client.read(buffer);
         if (read == -1) {
-            return true;
+            return;
         }
         buffer.flip();
 
@@ -53,7 +53,6 @@ public class ClientService implements Stoppable {
         buffer.get(responseData);
 
         System.out.println("Received response from server: " + new String(responseData));
-        return false;
     }
 
     public void sendMessage(String message) throws IOException {

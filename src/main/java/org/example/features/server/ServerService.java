@@ -9,7 +9,9 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.util.*;
+import java.util.Iterator;
+import java.util.Optional;
+import java.util.Set;
 
 public class ServerService implements Stoppable {
 
@@ -19,7 +21,7 @@ public class ServerService implements Stoppable {
     private String host;
     private ByteBuffer buffer;
 
-    private static Map<String, SocketChannel> clients = new HashMap<>();
+    private final ServerClientStorage serverClientStorage;
 
     private static ServerService instance;
 
@@ -38,6 +40,7 @@ public class ServerService implements Stoppable {
         this.port = tcpPort;
         this.host = host;
         this.buffer = ByteBuffer.allocate(256);
+        this.serverClientStorage = new ServerClientStorage();
     }
 
     public void listen() {
@@ -100,52 +103,61 @@ public class ServerService implements Stoppable {
         }
     }
 
-    private static void handleMessage(String message, SocketChannel client) throws IOException {
-        System.out.printf("%s: %s", client.getRemoteAddress(), message);
+    private void handleMessage(String receivedMessage, SocketChannel client) throws IOException {
+        System.out.printf("%s: %s", client.getRemoteAddress(), receivedMessage);
 
-        String[] words = message.split(" ");
-        String command = words[0];
-        if (!Set.of("NAME", "EXIT").contains(command)) {
-            if (clients.containsKey(command)) {
-                SocketChannel receiver = clients.get(command);
-                receiver.write(ByteBuffer.wrap(message.getBytes()));
-                client.write(ByteBuffer.wrap("Message sent successfully".getBytes()));
-                return;
-            } else {
-                client.write(ByteBuffer.wrap("Name not found".getBytes()));
-            }
-
+        String[] words = receivedMessage.split(" ");
+        if (words.length == 0) {
+            client.write(ByteBuffer.wrap("There is no command".getBytes()));
+            return;
+        } else if (words.length == 1) {
+            client.write(ByteBuffer.wrap("There is no message".getBytes()));
             return;
         }
 
+        String commandFromUser = words[0];
+        String message = receivedMessage.substring(commandFromUser.length() + 1);
 
-        if ("NAME".equals(command)) {
-            String name = message.substring(command.length() + 1);
-
-            if (clients.containsValue(client)) {
-                client.write(ByteBuffer.wrap("You already registered".getBytes()));
-                return;
-            }
-
-            if (clients.containsKey(name)) {
-                client.write(ByteBuffer.wrap("Name already exists".getBytes()));
-                return;
-            } else {
-                clients.put(name, client);
-                client.write(ByteBuffer.wrap("Name registered successfully".getBytes()));
-            }
-
-            System.out.println("Client name: " + name);
+        if (!serverClientStorage.isClientExists(client) && !commandFromUser.equals("NAME")) {
+            client.write(ByteBuffer.wrap("You are not registered, register first with command `NAME {your name}`".getBytes()));
             return;
         }
 
-        if ("EXIT".equals(command)) {
-            System.out.println("Connection closed by client: " + client.getRemoteAddress());
-            client.close();
-            return;
+        Set<String> commands = Set.of("NAME", "EXIT");
+        if (commands.contains(commandFromUser)) {
+            handleCommand(client, commandFromUser, message);
+        } else {
+            sendMessageToUser(client, commandFromUser, message);
         }
+    }
 
-        client.write(ByteBuffer.wrap("Message is invalid".getBytes()));
+    private void handleCommand(SocketChannel client, String commandFromUser, String message) throws IOException {
+        switch (commandFromUser) {
+            case "NAME" -> {
+                if (serverClientStorage.isClientExists(message)) {
+                    client.write(ByteBuffer.wrap("Name already exists".getBytes()));
+                } else {
+                    serverClientStorage.addClient(message, client);
+                    client.write(ByteBuffer.wrap("Name registered successfully".getBytes()));
+                    System.out.println("Client name: " + message);
+                }
+            }
+            case "EXIT" -> {
+                System.out.println("Connection closed by client: " + client.getRemoteAddress());
+                client.close();
+            }
+            default -> System.out.println("Command not found");
+        }
+    }
+
+    private void sendMessageToUser(SocketChannel client, String commandFromUser, String message) throws IOException {
+        Optional<SocketChannel> receiverOpt = serverClientStorage.getClient(commandFromUser);
+        if (receiverOpt.isPresent()) {
+            receiverOpt.get().write(ByteBuffer.wrap(message.getBytes()));
+            client.write(ByteBuffer.wrap("Message sent successfully".getBytes()));
+        } else {
+            client.write(ByteBuffer.wrap("Name not found".getBytes()));
+        }
     }
 
     private Optional<String> readMessage(SocketChannel client) throws IOException {
