@@ -104,26 +104,32 @@ public class ServerService implements Stoppable {
     }
 
     private void handleMessage(String receivedMessage, SocketChannel client) throws IOException {
-        System.out.printf("%s: %s", client.getRemoteAddress(), receivedMessage);
+        System.out.printf("%s: %s\n", client.getRemoteAddress(), receivedMessage);
 
         String[] words = receivedMessage.split(" ");
         if (words.length == 0) {
             client.write(ByteBuffer.wrap("There is no command".getBytes()));
             return;
-        } else if (words.length == 1) {
-            client.write(ByteBuffer.wrap("There is no message".getBytes()));
-            return;
         }
 
         String commandFromUser = words[0];
-        String message = receivedMessage.substring(commandFromUser.length() + 1);
+        String message = "";
+
+        Set<String> commandsThatRequiresMessage = Set.of("NAME");
+        if (commandsThatRequiresMessage.contains(commandFromUser) && words.length == 1) {
+            client.write(ByteBuffer.wrap("There is no message".getBytes()));
+            return;
+        } else if (commandsThatRequiresMessage.contains(commandFromUser)) {
+            message = receivedMessage.substring(commandFromUser.length() + 1);
+        }
+
 
         if (!serverClientStorage.isClientExists(client) && !commandFromUser.equals("NAME")) {
             client.write(ByteBuffer.wrap("You are not registered, register first with command `NAME {your name}`".getBytes()));
             return;
         }
 
-        Set<String> commands = Set.of("NAME", "EXIT");
+        Set<String> commands = Set.of("NAME", "QUIT", "STAT");
         if (commands.contains(commandFromUser)) {
             handleCommand(client, commandFromUser, message);
         } else {
@@ -142,7 +148,11 @@ public class ServerService implements Stoppable {
                     System.out.println("Client name: " + message);
                 }
             }
-            case "EXIT" -> {
+            case "STAT" -> {
+                String clients = serverClientStorage.getClientNames();
+                client.write(ByteBuffer.wrap(clients.getBytes()));
+            }
+            case "QUIT" -> {
                 System.out.println("Connection closed by client: " + client.getRemoteAddress());
                 client.close();
             }
@@ -150,14 +160,23 @@ public class ServerService implements Stoppable {
         }
     }
 
-    private void sendMessageToUser(SocketChannel client, String commandFromUser, String message) throws IOException {
+    private void sendMessageToUser(SocketChannel client, String commandFromUser, String clientMessage) throws IOException {
         Optional<SocketChannel> receiverOpt = serverClientStorage.getClient(commandFromUser);
-        if (receiverOpt.isPresent()) {
-            receiverOpt.get().write(ByteBuffer.wrap(message.getBytes()));
-            client.write(ByteBuffer.wrap("Message sent successfully".getBytes()));
-        } else {
-            client.write(ByteBuffer.wrap("Name not found".getBytes()));
+        if (receiverOpt.isEmpty()) {
+            client.write(ByteBuffer.wrap("User not found".getBytes()));
+            return;
         }
+
+        SocketChannel receiver = receiverOpt.get();
+
+        if (receiver.equals(client)) {
+            client.write(ByteBuffer.wrap("You can't send message to yourself".getBytes()));
+            return;
+        }
+
+        String message = String.format("%s: %s", commandFromUser, clientMessage);
+        receiver.write(ByteBuffer.wrap(message.getBytes()));
+        client.write(ByteBuffer.wrap("Message sent successfully".getBytes()));
     }
 
     private Optional<String> readMessage(SocketChannel client) throws IOException {

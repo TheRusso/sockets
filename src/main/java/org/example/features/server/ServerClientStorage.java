@@ -27,7 +27,7 @@ public class ServerClientStorage {
                 .map(ServerClient::channel);
     }
 
-    public String getClients() {
+    public String getClientNames() {
         return clients.stream()
                 .map(ServerClient::clientName)
                 .reduce("", (acc, clientName) -> acc + clientName + "\n");
